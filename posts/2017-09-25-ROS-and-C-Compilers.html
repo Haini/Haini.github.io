@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=0.5" http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+        <title>Constantin Schieber - ROS, Gazebo, V-REP and C Compilers</title>
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+        <link rel="stylesheet" type="text/css" href="../css/layout.css" />
+        
+        <script>
+          (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+          (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+          m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+          })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+        
+          ga('create', 'UA-84748923-1', 'auto');
+          ga('send', 'pageview');
+        
+        </script>
+    </head>
+    <body>
+        <div id="header">
+            <div id="logo">
+                <a href="../">Constantin Schieber</a>
+            </div>
+            <div id="navigation">
+                <a href="../">Home</a>
+                <a href="../about.html">About</a>
+                <a href="../contact.html">Contact</a>
+                <a href="../archive.html">Archive</a>
+            </div>
+        </div>
+
+        <div id="content">
+            <h1>ROS, Gazebo, V-REP and C Compilers</h1>
+
+            <div class="info">
+    Posted on September 25, 2017
+    
+</div>
+
+<h2>
+Prelude
+</h2>
+<p>
+<p>While using ROS in combination with Matlab/Simulink and V-REP I always experienced problems with compiling the <a href="https://github.com/fferri/v_repExtRosInterface">RosInterface</a> for V-REP. The compiling would go well, despite the fact that the installation instructions are sometimes lacking a parameter for commands.</p>
+But upon integrating the interface library with V-REP and starting it up while <code>roscore</code> was running I would always get a segmentation fault. I then proceeded to use a virtual machine for V-REP and ROS as I didn’t care about performance at that point. Everything worked fine and I was happy.
+</p>
+<h2>
+Gazebo enters the stage
+</h2>
+<p>
+<p>Well, I started to use <a href="www.gazebosim.org">Gazebo</a> to compare the perfomance of Gazebo and V-REP, but after completing my first few tutorials I needed to integrate plugins into my worlds, as these would allow me to control my model via ROS. So after starting with the plugin tutorials I noticed that after loading the constructor of my plugin a segmentation fault would take place. As Gazebo was easier to set up with <code>gdb</code> and the possibility of compiling with debug symbols was there I did so. And learnt nothing.</p>
+So here is the takeaway from this: If you want to compile a Gazebo Plugin with debug symbols just edit your <code>CMakeLists.txt</code> with the appropiate flag: <code>set(CMAKE_BUILD_TYPE Debug)</code> and you are all set. Then simply run in your <code>/build</code> folder <code>gdb gzserver</code> and execute the world as usual with <code>run ../yourWorldName.world</code>. Listing symbols from the plugin is as easy as wandering down the namespace: <code>list gazebo::PluginName::PluginFunction</code> will list the code in proximity of this function. Setting breakpoints can be done via the same method with the <code>break</code> command.
+</p>
+<p>
+It is worth noting that the plugins did neither work on my VirtualBox Machine nor on my real Ubuntu Install. So I was kind of stuck.
+</p>
+<h2>
+The solution
+</h2>
+<p>I set up <i>another</i> virtual machine then. Did all the setup as required in the tutorials and compiled all of my stuff. And it worked just <i>fine</i>. Having this setup in place I started to compare every library version, every package source, every <code>.*rc</code> file in my installation with the one in the virtual machine. I then found that I was compiling with</p>
+<p><code>gcc -v = gcc version 5.4.0 20160609 (Ubuntu 5.4.0-6ubuntu1~16.04.4)</code></p>
+<p>on the working machine and with</p>
+<p><code>gcc -v = gcc version 4.9.3(Ubuntu4.9.3-13ubuntu2)</code></p>
+<p>on the one where the plugins were crashing. So I fixed this with</p>
+<p><code>update-alternatives --config gcc</code></p>
+<p>and selecting the version &gt;5.0. Everything works fine since then I can finally sleep.</p>
+<h2>
+The post mortem
+</h2>
+<p>Turns out that no one died and no damage was done (well, my nerves suffered) so the heading doesn’t fit exactly. Doesn’t matter though. Turns out I did switch to the older gcc versions because of Simulink / Matlab, as those complained that the used compiler version was not supported. I was annoyed by that error message and made the 4.9 compiler the default, without ever thinking about it again. As Matlab / Simulink can fall back to the older compiler anyways I will live with the error message for now as I have better things to do ;-)</p>
+<p>The root of the problem may have been the wrong usage of libstdc++6 by the two compilers, I am attaching the segfault backtrace for my problem here:</p>
+<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="co">#0  __memcpy_sse2_unaligned () at ../sysdeps/x86_64/multiarch/memcpy-sse2-unaligned.S:160</span>
+<span class="co">#1  0x00007ffff71c53c2 in </span>
+<span class="kw">std</span>::__cxx11::basic_string<span class="kw">&lt;</span>char, std::char_traits<span class="kw">&lt;</span>char<span class="kw">&gt;</span>, 
+<span class="kw">std</span>::allocator<span class="kw">&lt;</span>char<span class="kw">&gt;</span> <span class="kw">&gt;</span>::_M_assign(std::__cxx11::basic_string<span class="kw">&lt;</span>char, std::char_traits<span class="kw">&lt;</span>char<span class="kw">&gt;</span>, 
+<span class="kw">std</span>::allocator<span class="kw">&lt;</span>char<span class="kw">&gt;</span> <span class="kw">&gt;</span> const<span class="kw">&amp;</span>) <span class="kw">()</span>
+   <span class="kw">from</span> /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+<span class="co">#2  0x00007ffff62a5ed2 in ?? () from /usr/lib/x86_64-linux-gnu/libgazebo_physics.so.7</span>
+<span class="co">#3  0x00007ffff628b3cd in </span>
+   <span class="kw">gazebo</span>::physics::World::LoadPlugin(
+   <span class="kw">std</span>::__cxx11::basic_string<span class="kw">&lt;</span>char, 
+   <span class="kw">std</span>::char_traits<span class="kw">&lt;</span>char<span class="kw">&gt;</span>, 
+   <span class="kw">std</span>::allocator<span class="kw">&lt;</span>char<span class="kw">&gt;</span> <span class="kw">&gt;</span> const<span class="kw">&amp;</span>, 
+   <span class="kw">std</span>::__cxx11::basic_string<span class="kw">&lt;</span>char, 
+   <span class="kw">std</span>::char_traits<span class="kw">&lt;</span>char<span class="kw">&gt;</span>, 
+   <span class="kw">std</span>::allocator<span class="kw">&lt;</span>char<span class="kw">&gt;</span> <span class="kw">&gt;</span> const<span class="kw">&amp;</span>, 
+   <span class="kw">std</span>::shared_ptr<span class="kw">&lt;</span>sdf::Element<span class="kw">&gt;</span>) <span class="kw">()</span>
+   <span class="kw">from</span> /usr/lib/x86_64-linux-gnu/libgazebo_physics.so.7
+<span class="co">#4  0x00007ffff628d879 in gazebo::physics::World::LoadPlugin(std::shared_ptr&lt;sdf::Element&gt;) ()</span>
+   <span class="kw">from</span> /usr/lib/x86_64-linux-gnu/libgazebo_physics.so.7
+<span class="co">#5  0x00007ffff628dbb0 in gazebo::physics::World::LoadPlugins() ()</span>
+   <span class="kw">from</span> /usr/lib/x86_64-linux-gnu/libgazebo_physics.so.7
+<span class="co">#6  0x00007ffff62a0345 in gazebo::physics::World::Step() ()</span>
+   <span class="kw">from</span> /usr/lib/x86_64-linux-gnu/libgazebo_physics.so.7
+<span class="co">#7  0x00007ffff62a06d5 in gazebo::physics::World::RunLoop() ()</span>
+   <span class="kw">from</span> /usr/lib/x86_64-linux-gnu/libgazebo_physics.so.7
+<span class="co">#8  0x00007ffff40435d5 in ?? () from /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.58.0</span>
+<span class="co">#9  0x00007ffff65c36ba in start_thread (arg=0x7fffb9bc6700) at pthread_create.c:333</span>
+<span class="co">#10 0x00007ffff6bcd3dd in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:109</span></code></pre></div>
+<h2>
+Miscellaneous version outputs
+</h2>
+<p><code>gazebo -v</code> yields <code>version 7.8.1</code></p>
+<p><code>cmake --version</code> yields <code>version 3.5.1</code></p>
+<p><code>make -v</code> yields <code>GNU Make 4.1</code></p>
+<p><code>lsb-release -a</code> yields <code>Ubuntu 16.04.3 LTS</code></p>
+<p><code>roscore -v</code> yields <code>/rosdistro: kinetic and /rosversion: 1.12.7</code></p>
+<hr />
+<p>Sources:</p>
+<p><a href="https://stackoverflow.com/questions/7832892/how-to-change-the-default-gcc-compiler-in-ubuntu">update-alternatives</a></p>
+<p><a href="http://gazebosim.org/tutorials/?tut=plugins_hello_world">gazebo-hello-world-tutorial</a></p>
+<p><a href="https://www.mathworks.com/content/dam/mathworks/mathworks-dot-com/support/sysreq/files/SystemRequirements-Release2016b_SupportedCompilers.pdf">matlab-supported-compilers (page 7)</a></p>
+<p><a href="http://www.coppeliarobotics.com/helpFiles/en/rosInterf.htm">V-REP-RosInterface</a>A</p>
+<p><a href="http://www.osboxes.org/ubuntu/">Osboxes-VirtualBox-Ubuntu</a></p>
+<p><a href="https://en.wikipedia.org/wiki/Postmortem_documentation">Post-Mortem-Project</a></p>
+<p><a href="https://en.wikipedia.org/wiki/Post-mortem_chemistry">Post-Mortem-Death</a></p>
+<p><a href="https://stackoverflow.com/questions/29786161/why-does-linking-with-pthread-cause-a-segmentation-fault">Compiler-libstdc++6-related</a></p>
+
+        </div>
+        <div id="footer">
+            Site proudly generated by
+            <a href="http://jaspervdj.be/hakyll">Hakyll</a>
+        </div>
+    </body>
+</html>
